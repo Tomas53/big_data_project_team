@@ -7,7 +7,7 @@ from logger_config import get_logger
 logger = get_logger("port_detection.log")
 
 # Define the path to your new AIS dataset
-CSV_PATH = "C:/Users/lukan/OneDrive/Desktop/Data Science/big_data_project_team/ais_dataset/aisdk-2024-05-04/aisdk-2024-05-04.csv"
+CSV_PATH = "./ais_dataset/aisdk-2024-05-04/aisdk-2024-05-04.csv"
 
 def main():
     # Initialize SparkSession
