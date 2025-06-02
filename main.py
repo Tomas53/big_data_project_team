@@ -1,16 +1,26 @@
-# This is a sample Python script.
+from pyspark.sql import SparkSession
+from logger_config import get_logger
+from port_filtering import load_and_filter_data  # Import filtering function
 
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
+# Configs
+CSV_PATH = "./ais_dataset/aisdk-2024-05-04/aisdk-2024-05-04.csv"
 
+def main():
+    logger = get_logger("port_detection.log")
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press ⌘F8 to toggle the breakpoint.
+    spark = SparkSession.builder \
+        .appName("Port Detection Pipeline") \
+        .config("spark.python.worker.faulthandler.enabled", "true") \
+        .config("spark.sql.execution.pyspark.udf.faulthandler.enabled", "true") \
+        .config("spark.sql.ansi.enabled", "false") \
+        .getOrCreate()
 
+    # Step 1: Load and filter data
+    df = load_and_filter_data(spark, CSV_PATH, logger)
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
+    # Step 2: (Next steps go here, e.g., stationary detection or clustering)
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    spark.stop()
+
+if __name__ == "__main__":
+    main()
