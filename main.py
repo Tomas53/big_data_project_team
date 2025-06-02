@@ -1,6 +1,8 @@
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
 from logger_config import get_logger
 from port_filtering import load_and_filter_data  # Import filtering function
+from port_detector import detect_ports
 
 # Configs
 CSV_PATH = "./ais_dataset/aisdk-2024-05-04/aisdk-2024-05-04.csv"
@@ -19,6 +21,12 @@ def main():
     df = load_and_filter_data(spark, CSV_PATH, logger)
 
     # Step 2: (Next steps go here, e.g., stationary detection or clustering)
+
+    ports_df = detect_ports(df, logger)
+    ports_df.show()
+
+
+    ports_df.orderBy(col("stationary_count").desc()).show(10, truncate=False)
 
     spark.stop()
 
