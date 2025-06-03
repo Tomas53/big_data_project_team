@@ -7,26 +7,45 @@ from branca.element import Template, MacroElement
 
 def visualize_ports(port_df: DataFrame, output_html="ports_map.html", logger=None):
     """
-    Visualize ports on a map, with size based on stationary count.
+    Visualize ports on a map, with size based on unique vessels count.
 
     Parameters:
     -----------
     port_df : DataFrame
-        Spark DataFrame containing port data with at least grid_lat, grid_lon, and stationary_count
+        Spark DataFrame containing port data with at least grid_lat, grid_lon, and unique_vessels.
+        If stationary_count is available, it will be shown in tooltips as additional information.
     output_html : str, default="ports_map.html"
         Path to save the output HTML map
     logger : logging.Logger, optional
         Logger for logging messages
     """
+    # Check if unique_vessels column exists
+    if "unique_vessels" not in port_df.columns:
+        error_msg = "Input DataFrame must contain 'unique_vessels' column"
+        if logger:
+            logger.error(error_msg)
+        else:
+            print(f"ERROR: {error_msg}")
+        raise ValueError(error_msg)
+
+    # Determine if stationary_count is available for tooltip info
+    has_stationary_count = "stationary_count" in port_df.columns
+
     # Convert grid back to approximate coordinates
     grid_size = 0.01
-    pdf = port_df.withColumn("lat", (port_df["grid_lat"] + 0.5) * grid_size) \
-        .withColumn("lon", (port_df["grid_lon"] + 0.5) * grid_size) \
-        .select("lat", "lon", "stationary_count") \
-        .toPandas()
+    if has_stationary_count:
+        pdf = port_df.withColumn("lat", (port_df["grid_lat"] + 0.5) * grid_size) \
+            .withColumn("lon", (port_df["grid_lon"] + 0.5) * grid_size) \
+            .select("lat", "lon", "unique_vessels", "stationary_count") \
+            .toPandas()
+    else:
+        pdf = port_df.withColumn("lat", (port_df["grid_lat"] + 0.5) * grid_size) \
+            .withColumn("lon", (port_df["grid_lon"] + 0.5) * grid_size) \
+            .select("lat", "lon", "unique_vessels") \
+            .toPandas()
 
-    # Sort by stationary_count to identify top ports
-    pdf = pdf.sort_values(by="stationary_count", ascending=False)
+    # Sort by unique_vessels to identify top ports
+    pdf = pdf.sort_values(by="unique_vessels", ascending=False)
 
     # Identify top 10 ports
     top_10_ports = pdf.head(10).copy()
@@ -34,7 +53,7 @@ def visualize_ports(port_df: DataFrame, output_html="ports_map.html", logger=Non
 
     if logger:
         logger.info(f"Preparing to render {len(pdf)} port candidates with top 10 highlighted")
-        logger.info(f"Top port has {pdf.iloc[0]['stationary_count']} stationary count")
+        logger.info(f"Top port has {pdf.iloc[0]['unique_vessels']} unique vessels")
 
     # Center around Denmark (latitude ~56, longitude ~10)
     map_center = [56.0, 10.0]
@@ -42,18 +61,27 @@ def visualize_ports(port_df: DataFrame, output_html="ports_map.html", logger=Non
 
     # Add title to the map
     title_html = '''
-        <h3 align="center" style="font-size:16px"><b>Port Locations Map - Stationary Count</b></h3>
+        <h3 align="center" style="font-size:16px"><b>Port Locations Map - Unique Vessels</b></h3>
     '''
     port_map.get_root().html.add_child(folium.Element(title_html))
 
-    # Find the maximum stationary count for scaling
-    max_count = pdf["stationary_count"].max()
+    # Find the maximum unique vessels count for scaling
+    max_count = pdf["unique_vessels"].max()
 
     # Add markers for regular ports
     regular_ports_group = folium.FeatureGroup(name="Regular Ports")
     for _, row in other_ports.iterrows():
-        # Scale radius based on stationary count (min 3, max 8)
-        radius = 3 + (row["stationary_count"] / max_count) * 5
+        # Scale radius based on unique vessels count (min 3, max 8)
+        radius = 3 + (row["unique_vessels"] / max_count) * 5
+
+        # Prepare tooltip text
+        if has_stationary_count:
+            tooltip_text = (f"Port at ({row['lat']:.4f}, {row['lon']:.4f})<br>" +
+                            f"Unique Vessels: {row['unique_vessels']}<br>" +
+                            f"Stationary Count: {row['stationary_count']}")
+        else:
+            tooltip_text = (f"Port at ({row['lat']:.4f}, {row['lon']:.4f})<br>" +
+                            f"Unique Vessels: {row['unique_vessels']}")
 
         folium.CircleMarker(
             location=(row["lat"], row["lon"]),
@@ -61,16 +89,26 @@ def visualize_ports(port_df: DataFrame, output_html="ports_map.html", logger=Non
             color="blue",
             fill=True,
             fill_opacity=0.6,
-            tooltip=f"Port at ({row['lat']:.4f}, {row['lon']:.4f})<br>" +
-                    f"Stationary Count: {row['stationary_count']}"
+            tooltip=tooltip_text
         ).add_to(regular_ports_group)
     regular_ports_group.add_to(port_map)
 
     # Add markers for top 10 ports with different style
-    top_ports_group = folium.FeatureGroup(name="Top 10 Largest Ports")
+    top_ports_group = folium.FeatureGroup(name="Top 10 Ports by Unique Vessels")
     for i, row in top_10_ports.iterrows():
         # Larger radius for top ports
-        radius = 8 + (row["stationary_count"] / max_count) * 7
+        radius = 8 + (row["unique_vessels"] / max_count) * 7
+
+        # Prepare tooltip text
+        if has_stationary_count:
+            tooltip_text = (f"<b>TOP {i + 1} PORT</b><br>" +
+                            f"Location: ({row['lat']:.4f}, {row['lon']:.4f})<br>" +
+                            f"Unique Vessels: {row['unique_vessels']}<br>" +
+                            f"Stationary Count: {row['stationary_count']}")
+        else:
+            tooltip_text = (f"<b>TOP {i + 1} PORT</b><br>" +
+                            f"Location: ({row['lat']:.4f}, {row['lon']:.4f})<br>" +
+                            f"Unique Vessels: {row['unique_vessels']}")
 
         folium.CircleMarker(
             location=(row["lat"], row["lon"]),
@@ -78,9 +116,7 @@ def visualize_ports(port_df: DataFrame, output_html="ports_map.html", logger=Non
             color="red",
             fill=True,
             fill_opacity=0.8,
-            tooltip=f"<b>TOP {i + 1} PORT</b><br>" +
-                    f"Location: ({row['lat']:.4f}, {row['lon']:.4f})<br>" +
-                    f"Stationary Count: {row['stationary_count']}"
+            tooltip=tooltip_text
         ).add_to(top_ports_group)
     top_ports_group.add_to(port_map)
 
@@ -100,13 +136,13 @@ def visualize_ports(port_df: DataFrame, output_html="ports_map.html", logger=Non
     <p style="margin-bottom: 5px;"><b>Legend</b></p>
     <div style="display: flex; align-items: center; margin-bottom: 5px;">
         <div style="width: 15px; height: 15px; border-radius: 50%; background-color: red; margin-right: 5px;"></div>
-        <span>Top 10 Largest Ports</span>
+        <span>Top 10 Ports by Unique Vessels</span>
     </div>
     <div style="display: flex; align-items: center;">
         <div style="width: 15px; height: 15px; border-radius: 50%; background-color: blue; margin-right: 5px;"></div>
         <span>Other Ports</span>
     </div>
-    <p style="margin-top: 5px; font-size: 12px;"><i>Circle size indicates stationary count</i></p>
+    <p style="margin-top: 5px; font-size: 12px;"><i>Circle size indicates number of unique vessels</i></p>
     </div>
     </div>
     '''
