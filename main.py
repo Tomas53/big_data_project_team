@@ -21,14 +21,12 @@ def main():
     # Step 1: Load and filter data
     df = load_and_filter_data(spark, CSV_PATH, logger)
 
-    # Step 2: (Next steps go here, e.g., stationary detection or clustering)
-
-    ports_df = detect_ports(df, logger)
+    # Step 2: Detect ports using grid-based method
+    ports_df = detect_ports(df, logger, grid_size=0.01, min_stationary_points=50, min_unique_vessels=10)
     ports_df.show()
-
-
     ports_df.orderBy(col("stationary_count").desc()).show(10, truncate=False)
 
+    # Step 3: Visualize detected ports on a map
     visualize_ports(ports_df, output_html="ports_map.html", logger=logger)
 
     spark.stop()
