@@ -101,12 +101,12 @@ def visualize_ports(port_df: DataFrame, output_html="ports_map.html", logger=Non
 
         # Prepare tooltip text
         if has_stationary_count:
-            tooltip_text = (f"<b>TOP {i + 1} PORT</b><br>" +
+            tooltip_text = (f"<b>PORT nr. {i + 1} </b><br>" +
                             f"Location: ({row['lat']:.4f}, {row['lon']:.4f})<br>" +
                             f"Unique Vessels: {row['unique_vessels']}<br>" +
                             f"Stationary Count: {row['stationary_count']}")
         else:
-            tooltip_text = (f"<b>TOP {i + 1} PORT</b><br>" +
+            tooltip_text = (f"<b>PORT nr. {i + 1} PORT</b><br>" +
                             f"Location: ({row['lat']:.4f}, {row['lon']:.4f})<br>" +
                             f"Unique Vessels: {row['unique_vessels']}")
 
