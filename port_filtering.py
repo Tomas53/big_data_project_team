@@ -1,5 +1,6 @@
-from pyspark.sql.functions import col, to_timestamp
+from pyspark.sql.functions import col, to_timestamp, lag, unix_timestamp
 from pyspark.sql.types import DoubleType
+from pyspark.sql.window import Window
 
 def load_and_filter_data(spark, csv_path, logger):
     # Read AIS CSV
@@ -19,6 +20,21 @@ def load_and_filter_data(spark, csv_path, logger):
         (col("Longitude").isNotNull()) & (col("Longitude") != 0.0) &
         (col("MMSI").isNotNull())
     )
+    logger.info(f"[DEBUG] After null/zero filtering: {df.count()}")
 
-    logger.info(f"[DEBUG] Filtered row count: {df.count()}")
+    # Window spec per vessel by time
+    w = Window.partitionBy("MMSI").orderBy("timestamp")
+
+    # Remove points with duplicate timestamps per vessel
+    df = df.withColumn("prev_ts", lag("timestamp").over(w))
+    df = df.filter((col("prev_ts").isNull()) | (unix_timestamp("timestamp") != unix_timestamp("prev_ts")))
+    logger.info(f"[DEBUG] After duplicate timestamp filtering: {df.count()}")
+
+    # Filter out entries with 0-second time difference (data spam)
+    df = df.withColumn("time_diff", unix_timestamp("timestamp") - unix_timestamp("prev_ts"))
+    df = df.filter((col("time_diff").isNull()) | (col("time_diff") > 0))
+    logger.info(f"[DEBUG] After 0-second time difference filtering: {df.count()}")
+
+    # TODO: Optional - add distance-based speed filtering if needed
+
     return df
