@@ -3,6 +3,7 @@ from pyspark.sql.functions import col
 from logger_config import get_logger
 from port_filtering import load_and_filter_data  # Import filtering function
 from port_detector import detect_ports
+from port_map import visualize_ports  # Import visualization function
 
 # Configs
 CSV_PATH = "./ais_dataset/aisdk-2024-05-04/aisdk-2024-05-04.csv"
@@ -27,6 +28,8 @@ def main():
 
 
     ports_df.orderBy(col("stationary_count").desc()).show(10, truncate=False)
+
+    visualize_ports(ports_df, output_html="ports_map.html", logger=logger)
 
     spark.stop()
 
